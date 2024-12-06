@@ -1,0 +1,45 @@
+# Configuração do pipeline Terraform no GitHub Actions
+name: Terraform CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    name: Terraform Workflow
+    runs-on: ubuntu-latest
+
+    steps:
+    # Passo 1: Checkout do repositório
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    # Passo 2: Instalar o Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.6
+
+    # Passo 3: Login no Azure
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    # Passo 4: Inicializar o Terraform
+    - name: Terraform Init
+      run: terraform init
+
+    # Passo 5: Planejar as mudanças
+    - name: Terraform Plan
+      run: terraform plan
+
+    # Passo 6: Aplicar as mudanças (apenas em push)
+    - name: Terraform Apply
+      if: github.event_name == 'push'
+      run: terraform apply -auto-approve

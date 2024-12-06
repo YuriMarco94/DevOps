@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:5.0
+    container_name: graylog-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - graylog-network
+    healthcheck:
+      test: "mongo --host 127.0.0.1 --eval 'db.adminCommand({ ping: 1 })'"
+      interval: 30s
+      timeout: 20s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+    container_name: graylog-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - cluster.name=graylog-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - graylog-network
+    healthcheck:
+      test: curl --fail http://localhost:9200/_cluster/health || exit 1
+      interval: 30s
+      timeout: 20s
+      retries: 10
+
+  graylog:
+    image: graylog/graylog:6.1.3
+    container_name: graylog-server
+    environment:
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://graylog-server:9000/
+      - GRAYLOG_ROOT_PASSWORD_SHA2=15e2b0d3c33891ebb0f1ef609ec419420c20e320ce94c65fbc8c3312448eb225
+      - GRAYLOG_PASSWORD_SECRET=MY_SECURE_PASSWORD_1234
+      - GRAYLOG_ELASTICSEARCH_VERSION=7
+      - GRAYLOG_ELASTICSEARCH_HOSTS=http://graylog-elasticsearch:9200
+    depends_on:
+      mongo:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "8080:9000"
+      - "9000:9000"
+      - "12201:12201"
+      - "12202:12202"
+    restart: unless-stopped
+    networks:
+      - graylog-network
+    volumes:
+      - graylog_logs:/usr/share/graylog/data
+    healthcheck:
+      test: curl --fail http://localhost:9000/api/system/lbstatus || exit 1
+      interval: 30s
+      timeout: 20s
+      retries: 10
+
+networks:
+  graylog-network:
+    driver: bridge
+
+volumes:
+  es_data:
+    driver: local
+  graylog_logs:
+    driver: local
+  mongo_data:
+    driver: local
